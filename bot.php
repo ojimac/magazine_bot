@@ -11,7 +11,7 @@ require_once "twitteroauth.php";
 require_once "bot_config.php";
 
 /*
- * TwitterへのPOSTを行う
+ * TwitterへのPOSTを行う(OAuth対応)
  */
 function send_twitter($message) {
 
