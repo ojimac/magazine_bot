@@ -1,26 +1,29 @@
 <?php
-
+// HTTP Request用ライブラリ
 require_once "HTTP/Client.php";
+// スクレイピングライブラリ
 require_once "scrape/scraper.Class.php";
-require_once "../../bot_config.php";
+// URL短縮ライブラリ
+require_once 'Services/ShortURL.php';
+// Twitter OAuth用ライブラリ
+require_once "twitteroauth.php";
+// 設定ファイル
+require_once "bot_config.php";
 
-function send_twitter($message)
-{
+/*
+ * TwitterへのPOSTを行う
+ */
+function send_twitter($message) {
 
-  $url = "http://twitter.com/statuses/update.xml?";
-  // 自分のtwitterユーザ名
-  $username = USER;
-  // 自分のtwitterパスワード
-  $password = PASS;
+  $consumer_key		= CONSUMER_KEY;
+  $consumer_secret	= CONSUMER_SECRET;
+  $access_token		= ACCESS_TOKEN;
+  $access_token_secret	= ACCESS_TOKEN_SECRET;
 
-  $params = "status=". rawurlencode($message);
+  $twitter = new TwitterOAuth($consumer_key, $consumer_secret, $access_token, $access_token_secret);
+  $message = $twitter->OAuthRequest("https://twitter.com/statuses/update.xml", "POST", array("status" => $message));
 
-
-  $result = file_get_contents($url.$params , false, stream_context_create(array(
-		"http" => array(
-		"method" => "POST",
-		"header" => "Authorization: Basic ". base64_encode($username. ":". $password)
-				))));
+  header("Content-Type: application/xml");
   echo $message . "<br />";
 }
 
@@ -63,13 +66,15 @@ function scrape() {
   $scraper = $scraper->xml->body->div{3}->ul{1};
 
   $data = array();
+  $shortUrl  = Services_ShortURL::factory('TinyURL');
 
   for($i=0; $i < count($scraper); $i++) {
     // 文字列に変換しないとオブジェクトのまま
     // オブジェクトのままだと配列にいれたとき値が入らない!
+    // URLが長過ぎて140文字超えるとエラーになってしまうので、短縮URLに変換する
     array_push($data , array(
 			     'name' => (string)$scraper->li{$i}->a{0}->strong,
-			     'url'  => (string)$scraper->li{$i}->a{1}->attributes()->href,
+			     'url'  => $shortUrl->shorten((string)$scraper->li{$i}->a{1}->attributes()->href),
 			     ));
   }
   return create_message($data);
