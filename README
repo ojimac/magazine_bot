@@ -26,3 +26,4 @@ PEARモジュール
 その他
 - scrape( スクレイピングライブラリ http://note.openvista.jp/251/)
 - twitteroauth (Twitter OAuth用ライブラリ https://github.com/abraham/twitteroauth/tree/master/twitteroauth/ )
+- php-domが必要です(scrape内で使っています。yum install php-xmlすると、php-xmlにphp-domも組み込まれています)
