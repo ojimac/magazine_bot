@@ -1,6 +1,8 @@
 <?php
 // HTTP Request用ライブラリ
 require_once "HTTP/Client.php";
+// HTTP Request用ライブラリ
+require_once "HTTP/Request.php";
 // スクレイピングライブラリ
 require_once "scrape/scraper.Class.php";
 // URL短縮ライブラリ
@@ -11,20 +13,20 @@ require_once "./twitteroauth/twitteroauth/twitteroauth.php";
 require_once "bot_config.php";
 
 // TwitterへのPOSTを行う(OAuth対応)
-function send_twitter($message) {
+function send_twitter($tweet_text) {
 	$consumer_key = CONSUMER_KEY;
 	$consumer_secret = CONSUMER_SECRET;
 	$access_token = ACCESS_TOKEN;
 	$access_token_secret = ACCESS_TOKEN_SECRET;
 
 	$twitter = new TwitterOAuth($consumer_key, $consumer_secret, $access_token, $access_token_secret);
-	$message = $twitter->OAuthRequest("https://twitter.com/statuses/update.xml", "POST", array("status" => $message));
-
+	$message = $twitter->OAuthRequest("https://twitter.com/statuses/update.xml", "POST", array("status" => $tweet_text));
+	sleep(1);
 	header("Content-Type: application/xml");
-	echo $message . "<br />";
+	echo $tweet_text . "\n";
 }
 
-function create_message($data) {
+function create_message($magazine_name, $fujisan_affiliate_url) {
 	//曜日対応表
 	$weekdayDefines = array(
 		'sunday'    => '日',
@@ -48,31 +50,80 @@ function create_message($data) {
 	}
 
 	// 取得したデータ分つぶやく
-	foreach($data as $mag) {
-		send_twitter($mag['name'] . ' ' . $mag['url'] . ' が' . $ymd . '(' . $weekday . ')' . ' に発売されるよ！');
-	}
+	send_twitter($magazine_name . ' ' . $fujisan_affiliate_url . ' が' . $ymd . '(' . $weekday . ')' . ' に発売されるよ！');
 }
 
 function scrape() {
-	//雑誌発売日チェッカ
-	$scraper = new WebScraper("http://itumag.s8.xrea.com/", "EUC-JP", true);
+	// fujisan.co.jpからスクレイピング
+	$scrape_date = date('Y-m-d');
+	$scraper = new WebScraper("http://www.fujisan.co.jp/GetTOCListByDate.asp?date=$scrape_date", "Shift_JIS", true);
 	$scraper->retrieve();
 
-	$scraper = $scraper->xml->body->div{3}->ul{1};
+	// aタグの塊の一つ手前まで取ってくる
+	// $scraper->xml->body->table->tr->td{1}->a とすると、一つ目の要素だけアクセスになってしまうのでここまで
+	$scrape_data = $scraper->xml->body->table->tr->td{1};
+	$scrape_data_arr = obj2arr($scrape_data);
+	$scrape_data_arr = $scrape_data_arr['a'];
 
-	$data = array();
 	$shortUrl = Services_ShortURL::factory('TinyURL');
 
-	for($i=0; $i < count($scraper); $i++) {
-		// 文字列に変換しないとオブジェクトのまま
-		// オブジェクトのままだと配列にいれたとき値が入らない!
-		// URLが長過ぎて140文字超えるとエラーになってしまうので、短縮URLに変換する
-		array_push($data , array(
-			'name' => (string)$scraper->li{$i}->a{0}->strong,
-			'url'  => $shortUrl->shorten((string)$scraper->li{$i}->a{1}->attributes()->href),
-		));
+	foreach ($scrape_data_arr as $v) {
+		$fujisan_affiliate_url = makeUrl($v);
+		create_message($v, $shortUrl->shorten($fujisan_affiliate_url));
+		sleep(1);
 	}
-	return create_message($data);
+	return;
+}
+
+/**
+ * fujisan.ne.jpのアフィリリンクURLを作る
+ */
+function makeUrl($magazine_name) {
+
+	$magazine_name = urlencode($magazine_name);
+
+	// リクエストを行うURLの指定
+	$request_url = "http://ws.fujisan.co.jp/search/keyword?query={$magazine_name}&results=1&ap=magazine_bot";
+
+	$option = array(
+		"timeout"        => "10", // タイムアウトの秒数指定
+		"allowRedirects" => true, // リダイレクトの許可設定(true/false)
+		"maxRedirects"   => 3,    // リダイレクトの最大回数
+	);
+
+	$http = new HTTP_Request($request_url, $option);
+	$response = $http->sendRequest();
+
+	//sleep(0.5);
+
+	if ($response) {
+		$res = $http->getResponseBody();
+		$obj = simplexml_load_string($res);
+		// XML -> 連想配列変換
+		$arr = json_decode(json_encode($obj), true);
+
+		if (array_key_exists('Product', $arr)) {
+			$url = $arr['Product']['ProductUrl'];
+		} else {
+			$url = '';
+		}
+	} else {
+		$url = '';
+	}
+	return $url;
+}
+
+function obj2arr($obj) {
+	if (! is_object($obj)) {
+		return $obj;
+	}
+
+	$arr = (array)$obj;
+
+	foreach ($arr as &$a) {
+		$a = obj2arr($a);
+	}
+	return $arr;
 }
 
 // 今日発売の雑誌を取りに行く!
