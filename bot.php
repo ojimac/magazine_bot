@@ -60,8 +60,7 @@ function scrape() {
 	$scraper->retrieve();
 
 	// aタグの塊の一つ手前まで取ってくる
-	// $scraper->xml->body->table->tr->td{1}->a とすると、一つ目の要素だけアクセスになってしまうのでここまで
-	$scrape_data = $scraper->xml->body->table->tr->td{1};
+	$scrape_data = $scraper->xml->body->table->tr{1}->td->table->tr->td{1};
 	$scrape_data_arr = obj2arr($scrape_data);
 	$scrape_data_arr = $scrape_data_arr['a'];
 
