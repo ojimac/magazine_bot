@@ -3,3 +3,6 @@ twitteroauth/
 twitteroauth.php
 scrape/
 OAuth.php
+
+# below, ruby version ignore files
+config.yml
